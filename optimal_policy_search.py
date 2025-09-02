@@ -165,7 +165,7 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
                     state - 1, action
                 ] * (G_t - Q[state - 1, action])
 
-        k = k + 0.1
+        k = k + 0.5  # TODO: find a common decay for all algorithms
         eps = 1 / np.sqrt(k)
 
         new_policy_matrix, new_policy = eps_greedy_policy(mdp, Q, eps)
@@ -231,7 +231,7 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
             s_t = s_t_1
             a_t = a_t_1
             i += 1
-            k = k + 1
+            k = k + 0.5  # TODO: find a common decay for all algorithms
 
             # Decay epsilon after each episode
             eps = 1 / np.sqrt(k)
@@ -291,7 +291,7 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
             # Prepare for next step
             s_t = s_t_1
             i += 1
-            k = k + 1  # TODO: find a common decay for all algorithms
+            k = k + 0.5  # TODO: find a common decay for all algorithms
 
             # Decay epsilon after each episode
             eps = 1 / np.sqrt(k)
