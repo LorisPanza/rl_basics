@@ -291,7 +291,7 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
             # Prepare for next step
             s_t = s_t_1
             i += 1
-            k = k + 1
+            k = k + 1  # TODO: find a common decay for all algorithms
 
             # Decay epsilon after each episode
             eps = 1 / np.sqrt(k)
