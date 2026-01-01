@@ -350,10 +350,10 @@ if __name__ == "__main__":
     starting_position = 3
     final_position = 7
 
-    mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=False)
+    mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=True)
 
     # Single algorithm visualization with step-through slider
-    visualizer = RLVisualizer(mdp, algorithm_name="montecarlo")
+    visualizer = RLVisualizer(mdp, algorithm_name="td_sarsa")
     visualizer.create_dashboard(steps=30, num_episodes=1000)
 
     # Uncomment to compare algorithms

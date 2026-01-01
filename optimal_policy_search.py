@@ -160,22 +160,29 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
         - Policy is improved using epsilon-greedy strategy after each episode.
         - The epsilon value decays over episodes to favor exploitation over exploration.
     """
-
+    # set montecarlo parameters
     visited_states = set()
     N = np.zeros(
         (len(mdp.state_space), len(mdp.action_space))
     )  # State-action visit counts
     Q = np.zeros((len(mdp.state_space), len(mdp.action_space)))
+
+    # set decaying epsilon parameters
     k = 0
     eps = 1
-    new_policy_matrix, new_policy = eps_greedy_policy(mdp, Q, eps)
+
+    # Initialize policy with epsilon-greedy
+    new_policy_matrix, greedy_policy = eps_greedy_policy(mdp, Q, eps)
 
     # History tracking
-    policy_history = [np.copy(new_policy)]
+    policy_greedy_history = [np.copy(greedy_policy)]
     Q_history = [np.copy(Q)]
 
+    # Start episodes
     for n in range(num_episodes):
-        mdp.policy = new_policy_matrix  # Set current policy in MDP
+        mdp.policy = (
+            new_policy_matrix  # Set current policy in MDP for episode generation
+        )
         episode = mdp.generate_episode(steps)
         visited_states.clear()
 
@@ -191,13 +198,14 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
         k = k + 0.1  # TODO: find a common decay for all algorithms
         eps = min(1.0, 1 / np.sqrt(k))
 
-        new_policy_matrix, new_policy = eps_greedy_policy(mdp, Q, eps)
+        new_policy_matrix, greedy_policy = eps_greedy_policy(mdp, Q, eps)
 
         # Save to history
-        policy_history.append(np.copy(new_policy))
+        policy_greedy_history.append(np.copy(greedy_policy))
         Q_history.append(np.copy(Q))
+        print(f"Final epsilon: {eps}")
 
-    return new_policy, Q, policy_history, Q_history
+    return greedy_policy, Q, policy_greedy_history, Q_history
 
 
 def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
@@ -214,29 +222,44 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
         policy_history: List of policies at each episode.
         Q_history: List of Q-value functions at each episode.
     """
+    # Initialize Q-values
     Q = np.zeros((len(mdp.state_space), len(mdp.action_space)))
+
+    # Initialize epsilon parameters
     eps = 1  # initial exploration rate
     i = 0  # to count steps in episode
     k = 0  # to decay epsilon
-    numbered_action = [i for i in range(len(mdp.action_space))]
+
+    # Initialize policy
+    if not mdp.random_policy:
+        policy_matrix = np.zeros(
+            (len(mdp.state_space), len(mdp.action_space)), dtype=int
+        )
+        policy_matrix[np.arange(len(mdp.state_space)), mdp.policy] = (
+            1  # this is useful for stochastic policy representation (generate episodes)
+        )
+        mdp.policy = policy_matrix
+
+    # Generate initial epsilon-greedy policy
+    new_policy_matrix, greedy_policy = eps_greedy_policy(mdp, Q, eps)
 
     # History tracking
-    policy_history = []
+    policy_greedy_history = [np.copy(greedy_policy)]
     Q_history = [np.copy(Q)]
 
+    # Start episodes
     for episode_idx in range(num_episodes):
         s_t = mdp.starting_position
         done = False
         i = 0
+        mdp.policy = new_policy_matrix
 
         # Choose action according to current policy
-        a_t_w = np.random.choice(numbered_action, p=mdp.policy[s_t - 1])
+        a_t_w = np.random.choice(mdp.action_space, p=mdp.policy[s_t - 1])
         a_t = mdp.map_action[a_t_w]
 
         while not done and i < steps:
             # Update policy after every step
-            new_policy_matrix, new_policy = eps_greedy_policy(mdp, Q, eps)
-            mdp.policy = new_policy_matrix
 
             # Take action, observe reward and next state
             r_t = mdp.rew[s_t - 1, a_t]
@@ -249,13 +272,16 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
                 )  # TODO: stochastic transitions
 
             # Choose next action according to updated policy (for SARSA)
-            a_t_1_w = np.random.choice(numbered_action, p=mdp.policy[s_t_1 - 1])
+            a_t_1_w = np.random.choice(mdp.action_space, p=mdp.policy[s_t_1 - 1])
             a_t_1 = mdp.map_action[a_t_1_w]
 
             # TD update (SARSA)
-            Q[s_t - 1, a_t] = Q[s_t - 1, a_t] + alpha * (
-                r_t + gamma * Q[s_t_1 - 1, a_t_1] - Q[s_t - 1, a_t]
-            )
+            if s_t_1 == mdp.final_position:
+                target = r_t
+            else:
+                target = r_t + gamma * Q[s_t_1 - 1, a_t_1]
+
+            Q[s_t - 1, a_t] += alpha * (target - Q[s_t - 1, a_t])
 
             # Check for terminal state
             if s_t_1 == mdp.final_position:
@@ -265,18 +291,23 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
             s_t = s_t_1
             a_t = a_t_1
             i += 1
-            k = k + 0.5  # TODO: find a common decay for all algorithms
 
-            # Decay epsilon after each episode
-            eps = 1 / np.sqrt(k)
+        k = k + 0.1  # TODO: find a common decay for all algorithms
+        # Decay epsilon after each episode
+        eps = min(1.0, 1 / np.sqrt(k))
+
+        new_policy_matrix, greedy_policy = eps_greedy_policy(
+            mdp, Q, eps
+        )  # set new policy every episode
 
         # Save to history after each episode
-        policy_history.append(np.argmax(Q, axis=1))
+        policy_greedy_history.append(greedy_policy)
         Q_history.append(np.copy(Q))
+        print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
 
     # After training, return the greedy policy and Q
-    best_policy = np.argmax(Q, axis=1)
-    return best_policy, Q, policy_history, Q_history
+    # best_policy = np.argmax(Q, axis=1)
+    return greedy_policy, Q, policy_greedy_history, Q_history
 
 
 def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
