@@ -32,7 +32,7 @@ class RLVisualizer:
         self.current_step = 0
         self.colorbars = {}  # Store colorbars for cleanup
 
-    def visualize_grid_policy(self, policy, ax, title="Policy"):
+    def visualize_grid_policy(self, policy, ax, title="Greedy Policy"):
         """
         Visualize the policy on the grid.
         :param policy: Policy array (deterministic)
@@ -210,7 +210,6 @@ class RLVisualizer:
             )
             self.policy_history = pol_hist
             self.q_history = Q_hist
-            print(self.q_history[-1])
             self.value_history = [np.max(Q_val, axis=1) for Q_val in Q_hist]
 
         elif self.algorithm_name == "td_sarsa":
@@ -353,7 +352,7 @@ if __name__ == "__main__":
     mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=True)
 
     # Single algorithm visualization with step-through slider
-    visualizer = RLVisualizer(mdp, algorithm_name="td_sarsa")
+    visualizer = RLVisualizer(mdp, algorithm_name="q_learning")
     visualizer.create_dashboard(steps=30, num_episodes=1000)
 
     # Uncomment to compare algorithms

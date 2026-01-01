@@ -195,7 +195,7 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
                     state - 1, action
                 ] * (G_t - Q[state - 1, action])
 
-        k = k + 0.1  # TODO: find a common decay for all algorithms
+        k = k + 0.01  # TODO: find a common decay for all algorithms
         eps = min(1.0, 1 / np.sqrt(k))
 
         new_policy_matrix, greedy_policy = eps_greedy_policy(mdp, Q, eps)
@@ -203,7 +203,7 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
         # Save to history
         policy_greedy_history.append(np.copy(greedy_policy))
         Q_history.append(np.copy(Q))
-        print(f"Final epsilon: {eps}")
+    print(f"Final epsilon: {eps}")
 
     return greedy_policy, Q, policy_greedy_history, Q_history
 
@@ -292,7 +292,7 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
             a_t = a_t_1
             i += 1
 
-        k = k + 0.1  # TODO: find a common decay for all algorithms
+        k = k + 0.01  # TODO: find a common decay for all algorithms
         # Decay epsilon after each episode
         eps = min(1.0, 1 / np.sqrt(k))
 
@@ -303,7 +303,7 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
         # Save to history after each episode
         policy_greedy_history.append(greedy_policy)
         Q_history.append(np.copy(Q))
-        print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
+    print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
 
     # After training, return the greedy policy and Q
     # best_policy = np.argmax(Q, axis=1)
@@ -330,7 +330,7 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
     k = 0  # to decay epsilon
 
     # History tracking
-    policy_history = []
+    policy_greedy_history = [np.argmax(Q, axis=1)]
     Q_history = [np.copy(Q)]
 
     for episode_idx in range(num_episodes):
@@ -355,10 +355,12 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
                     mdp.action_matrix[a_t][s_t - 1].argmax() + 1
                 )  # TODO: stochastic transitions
 
-            # TD update (Q-learning)
-            Q[s_t - 1, a_t] = Q[s_t - 1, a_t] + alpha * (
-                r_t + gamma * np.max(Q[s_t_1 - 1, :]) - Q[s_t - 1, a_t]
-            )
+            if s_t_1 == mdp.final_position:
+                target = r_t
+            else:
+                target = r_t + gamma * np.max(Q[s_t_1 - 1, :])
+
+            Q[s_t - 1, a_t] += alpha * (target - Q[s_t - 1, a_t])
 
             # Check for terminal state
             if s_t_1 == mdp.final_position:
@@ -367,18 +369,19 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
             # Prepare for next step
             s_t = s_t_1
             i += 1
-            k = k + 0.5  # TODO: find a common decay for all algorithms
 
-            # Decay epsilon after each episode
-            eps = 1 / np.sqrt(k)
+        # Decay epsilon after each episode
+        k += 0.3
+        eps = min(1.0, 1 / np.sqrt(k))  # TODO: find a common decay for all algorithms
 
         # Save to history after each episode
-        policy_history.append(np.argmax(Q, axis=1))
+        policy_greedy_history.append(np.argmax(Q, axis=1))
         Q_history.append(np.copy(Q))
+    print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
 
     # After training, return the greedy policy and Q
     best_policy = np.argmax(Q, axis=1)
-    return best_policy, Q, policy_history, Q_history
+    return best_policy, Q, policy_greedy_history, Q_history
 
 
 if __name__ == "__main__":
