@@ -14,33 +14,44 @@ def policy_iteration(mdp, gamma=0.9):
     Q(s,a) = R(s,a) + gamma * (sum over_s' P(s'|s, a) * V(s'))
     pi_{i+1}(s) = argmax_a Q(s,a)
     """
-    new_policy = np.random.randint(
-        0, len(mdp.action_space), size=len(mdp.state_space)
-    )  # Random initial policy
+    if mdp.random_policy:
+        new_policy = np.argmax(mdp.policy, axis=1)  # Stochastic initial policy
+    else:
+        new_policy = mdp.policy  # Deterministic initial policy
+        print(f"Initial policy: {new_policy}")
 
     V = np.zeros(len(mdp.state_space))  # Initialize value function
     Q = np.zeros(
         (len(mdp.state_space), len(mdp.action_space))
     )  # Initialize action-value function
 
-    old_policy = np.zeros_like(new_policy)
+    old_policy = np.ones(len(mdp.state_space)) * -1  # To ensure at least one iteration
+
+    # History tracking
+    policy_history = []
+    value_history = []
 
     while not np.array_equal(new_policy, old_policy):
         old_policy = np.copy(new_policy)
 
-        mdp.policy = new_policy  # Set initial policy in MDP
+        mdp.policy = new_policy  # Set current policy in MDP
 
         V = iterative_algorithm_policy_evaluation(
             mdp, gamma=0.9, theta=1e-10
-        )  # It requires mdp knowledge
+        )  # Evaluate current policy
 
+        # Save synchronized: this policy achieves this value
+        policy_history.append(np.copy(new_policy))
+        value_history.append(np.copy(V))
+
+        # Policy improvement
         for s in range(len(mdp.state_space)):
             for a in range(len(mdp.action_space)):
                 Q[s, a] = mdp.rew[s, a] + gamma * np.sum(mdp.action_matrix[a][s, :] * V)
 
         new_policy = np.argmax(Q, axis=1)
 
-    return new_policy, V
+    return new_policy, V, policy_history, value_history
 
 
 def value_iteration(mdp, gamma=0.9, theta=0.001):
@@ -57,8 +68,18 @@ def value_iteration(mdp, gamma=0.9, theta=0.001):
     V_prev = np.zeros_like(V)
 
     delta = 0
-    new_policy = np.zeros(len(mdp.state_space), dtype=int)
+    # Random policy is not used in value iteration, but kept for consistency
+    if mdp.random_policy:
+        new_policy = np.argmax(mdp.policy, axis=1)  # Stochastic initial policy
+    else:
+        new_policy = mdp.policy  # Deterministic initial policy
+        print(f"Initial policy: {new_policy}")
 
+    # History tracking
+    value_history = []
+    policy_history = []
+    value_history.append(np.copy(V))
+    policy_history.append(np.copy(new_policy))
     while True:
         delta = 0
         for s in range(len(mdp.state_space)):
@@ -71,22 +92,27 @@ def value_iteration(mdp, gamma=0.9, theta=0.001):
             V[s] = np.max(V_action[s, :])
 
         delta = max(delta, np.abs(V - V_prev).sum())
+
+        # Extract policy from current V values
+        for s in range(len(mdp.state_space)):
+            best_action_value = -np.inf
+            for a in range(len(mdp.action_space)):
+                action_value = mdp.rew[s, a] + gamma * np.sum(
+                    mdp.action_matrix[a][s, :] * V
+                )
+                if action_value > best_action_value:
+                    best_action_value = action_value
+                    best_action = a
+            new_policy[s] = best_action
+
+        # Save synchronized: this policy achieves this value
+        value_history.append(np.copy(V))
+        policy_history.append(np.copy(new_policy))
+
         if delta < theta:
             break
 
-    for s in range(len(mdp.state_space)):
-        best_action_value = -np.inf
-        for a in range(len(mdp.action_space)):
-            action_value = mdp.rew[s, a] + gamma * np.sum(
-                mdp.action_matrix[a][s, :] * V
-            )
-            if action_value > best_action_value:
-                best_action_value = action_value
-                best_action = a
-
-        new_policy[s] = best_action
-
-    return new_policy, V
+    return new_policy, V, policy_history, value_history
 
 
 def eps_greedy_policy(mdp, Q, eps):
@@ -101,26 +127,17 @@ def eps_greedy_policy(mdp, Q, eps):
     Returns:
         new_policy: A numpy array representing the policy, where each entry is the chosen action for a state.
     """
-    best_q_policy = np.argmax(Q, axis=1)
-    new_policy = np.zeros(len(mdp.state_space), dtype=int)
+    num_states = len(mdp.state_space)
+    num_actions = len(mdp.action_space)
 
-    for s in range(len(mdp.state_space)):
-        if np.random.rand() < eps:
-            feasible_actions = [
-                mdp.map_action[a]
-                for a in mdp.action_space
-                if a != mdp.map_number_to_action[best_q_policy[s]]
-            ]  # Get feasible actions
-            if feasible_actions:
-                new_policy[s] = np.random.choice(feasible_actions)
-        else:
-            new_policy[s] = best_q_policy[s]
+    policy_matrix = np.zeros((num_states, num_actions))
+    best_actions = np.argmax(Q, axis=1)
 
-    # After new_policy is computed (as a vector of actions for each state)
-    policy_matrix = np.zeros((len(new_policy), len(mdp.action_space)), dtype=int)
-    policy_matrix[np.arange(len(new_policy)), new_policy] = 1
+    for s in range(num_states):
+        policy_matrix[s, :] = eps / num_actions
+        policy_matrix[s, best_actions[s]] += 1 - eps
 
-    return policy_matrix, new_policy
+    return policy_matrix, best_actions
 
 
 def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
@@ -135,6 +152,8 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
     Returns:
         new_policy: A numpy array representing the estimated optimal policy for each state.
         Q: The action-value function as a 2D numpy array of shape (num_states, num_actions).
+        policy_history: List of policies at each episode.
+        Q_history: List of Q-value functions at each episode.
 
     Algorithm Details:
         - Uses first-visit Monte Carlo method to update Q-values.
@@ -151,6 +170,10 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
     eps = 1
     new_policy_matrix, new_policy = eps_greedy_policy(mdp, Q, eps)
 
+    # History tracking
+    policy_history = [np.copy(new_policy)]
+    Q_history = [np.copy(Q)]
+
     for n in range(num_episodes):
         mdp.policy = new_policy_matrix  # Set current policy in MDP
         episode = mdp.generate_episode(steps)
@@ -165,13 +188,16 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
                     state - 1, action
                 ] * (G_t - Q[state - 1, action])
 
-        k = k + 0.5  # TODO: find a common decay for all algorithms
-        eps = 1 / np.sqrt(k)
+        k = k + 0.1  # TODO: find a common decay for all algorithms
+        eps = min(1.0, 1 / np.sqrt(k))
 
         new_policy_matrix, new_policy = eps_greedy_policy(mdp, Q, eps)
 
-    print(new_policy_matrix)
-    return new_policy, Q
+        # Save to history
+        policy_history.append(np.copy(new_policy))
+        Q_history.append(np.copy(Q))
+
+    return new_policy, Q, policy_history, Q_history
 
 
 def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
@@ -185,18 +211,26 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
     Returns:
         best_policy: A numpy array representing the optimal action for each state.
         Q: The learned action-value function as a 2D numpy array (states x actions).
+        policy_history: List of policies at each episode.
+        Q_history: List of Q-value functions at each episode.
     """
     Q = np.zeros((len(mdp.state_space), len(mdp.action_space)))
     eps = 1  # initial exploration rate
     i = 0  # to count steps in episode
     k = 0  # to decay epsilon
+    numbered_action = [i for i in range(len(mdp.action_space))]
+
+    # History tracking
+    policy_history = []
+    Q_history = [np.copy(Q)]
 
     for episode_idx in range(num_episodes):
         s_t = mdp.starting_position
         done = False
         i = 0
+
         # Choose action according to current policy
-        a_t_w = np.random.choice(mdp.action_space, p=mdp.policy[s_t - 1])
+        a_t_w = np.random.choice(numbered_action, p=mdp.policy[s_t - 1])
         a_t = mdp.map_action[a_t_w]
 
         while not done and i < steps:
@@ -215,7 +249,7 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
                 )  # TODO: stochastic transitions
 
             # Choose next action according to updated policy (for SARSA)
-            a_t_1_w = np.random.choice(mdp.action_space, p=mdp.policy[s_t_1 - 1])
+            a_t_1_w = np.random.choice(numbered_action, p=mdp.policy[s_t_1 - 1])
             a_t_1 = mdp.map_action[a_t_1_w]
 
             # TD update (SARSA)
@@ -236,9 +270,13 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
             # Decay epsilon after each episode
             eps = 1 / np.sqrt(k)
 
+        # Save to history after each episode
+        policy_history.append(np.argmax(Q, axis=1))
+        Q_history.append(np.copy(Q))
+
     # After training, return the greedy policy and Q
     best_policy = np.argmax(Q, axis=1)
-    return best_policy, Q
+    return best_policy, Q, policy_history, Q_history
 
 
 def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
@@ -251,11 +289,18 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
         gamma: Discount factor for future rewards (default is 0.9).
     Returns:
         best_policy: A numpy array representing the optimal action for each state.
+        Q: The learned action-value function as a 2D numpy array (states x actions).
+        policy_history: List of policies at each episode.
+        Q_history: List of Q-value functions at each episode.
     """
     Q = np.zeros((len(mdp.state_space), len(mdp.action_space)))
     eps = 1  # initial exploration rate
     i = 0  # to count steps in episode
     k = 0  # to decay epsilon
+
+    # History tracking
+    policy_history = []
+    Q_history = [np.copy(Q)]
 
     for episode_idx in range(num_episodes):
         s_t = mdp.starting_position
@@ -296,9 +341,13 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
             # Decay epsilon after each episode
             eps = 1 / np.sqrt(k)
 
+        # Save to history after each episode
+        policy_history.append(np.argmax(Q, axis=1))
+        Q_history.append(np.copy(Q))
+
     # After training, return the greedy policy and Q
     best_policy = np.argmax(Q, axis=1)
-    return best_policy, Q
+    return best_policy, Q, policy_history, Q_history
 
 
 if __name__ == "__main__":
@@ -309,32 +358,44 @@ if __name__ == "__main__":
 
     mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=False)
 
-    best_pol, V = policy_iteration(mdp)
+    best_pol, V, pol_hist, val_hist = policy_iteration(mdp)
     print(f"Best policy, policy iteration: {best_pol}")
     print(f"V found: {V}")
+    print(f"Policy iterations: {len(pol_hist)}")
+    print(f"Value iterations: {len(val_hist)}")
 
-    best_pol, V = value_iteration(mdp)
+    best_pol, V, pol_hist, val_hist = value_iteration(mdp)
     print(f"Best policy, value iteration: {best_pol}")
     print(f"V found: {V}")
+    print(f"Policy iterations: {len(pol_hist)}")
+    print(f"Value iterations: {len(val_hist)}")
 
     steps = 20
     num_episodes = 5000
-    best_pol, Q = montecarlo_model_free_on_policy(
+    best_pol, Q, pol_hist, Q_hist = montecarlo_model_free_on_policy(
         mdp, steps=steps, num_episodes=num_episodes
     )
     print(f"Best policy, MC iteration: {best_pol}")
     print(f"Q found: {Q}")
+    print(f"Policy episodes: {len(pol_hist)}")
+    print(f"Q episodes: {len(Q_hist)}")
 
     steps = 20
     num_episodes = 5000
-    best_pol, Q = td_model_free_on_policy(mdp, steps=steps, num_episodes=num_episodes)
+    best_pol, Q, pol_hist, Q_hist = td_model_free_on_policy(
+        mdp, steps=steps, num_episodes=num_episodes
+    )
     print(f"Best policy, TD iteration: {best_pol}")
     print(f"Q found: {Q}")
+    print(f"Policy episodes: {len(pol_hist)}")
+    print(f"Q episodes: {len(Q_hist)}")
 
     steps = 20
     num_episodes = 5000
-    best_pol, Q = q_learning_model_free_off_policy(
+    best_pol, Q, pol_hist, Q_hist = q_learning_model_free_off_policy(
         mdp, steps=steps, num_episodes=num_episodes
     )
     print(f"Best policy, Q-Learning iteration: {best_pol}")
     print(f"Q found: {Q}")
+    print(f"Policy episodes: {len(pol_hist)}")
+    print(f"Q episodes: {len(Q_hist)}")

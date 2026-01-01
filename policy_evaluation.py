@@ -20,18 +20,18 @@ def iterative_algorithm_policy_evaluation(mdp, gamma=0.9, theta=1e-10):
         V_prev = np.copy(V)
 
         for s in range(len(mdp.state_space)):
-            if mdp.random_policy is False:
-                future_action = mdp.policy[s]  # define the action
+            # if mdp.random_policy is False:
+            future_action = mdp.policy[s]  # define the action
 
-                action_matrix = mdp.action_matrix[
-                    future_action
-                ]  # consider the action and retrieve the matrix for this action
+            action_matrix = mdp.action_matrix[
+                future_action
+            ]  # consider the action and retrieve the matrix for this action
 
-                v = mdp.rew[s, future_action] + gamma * np.sum(
-                    action_matrix[s, :] * V_prev
-                )
+            v = mdp.rew[s, future_action] + gamma * np.sum(action_matrix[s, :] * V_prev)
 
-            else:
+            """
+            # for now the stochastic policy is not implemented for iterative algorithm, at the beginning of policy evaluation is taken the argmax action
+             else:
                 v = 0
 
                 for a in mdp.action_matrix.keys():
@@ -39,6 +39,8 @@ def iterative_algorithm_policy_evaluation(mdp, gamma=0.9, theta=1e-10):
                         mdp.rew[s, a]
                         + gamma * np.sum(mdp.action_matrix[a][s, :] * V_prev)
                     )
+
+            """
 
             # Update delta for convergence check
             delta = max(delta, np.abs(v - V_prev[s]))
