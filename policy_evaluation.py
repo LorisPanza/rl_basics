@@ -20,27 +20,32 @@ def iterative_algorithm_policy_evaluation(mdp, gamma=0.9, theta=1e-10):
         V_prev = np.copy(V)
 
         for s in range(len(mdp.state_space)):
-            # if mdp.random_policy is False:
-            future_action = mdp.policy[s]  # define the action
+            if mdp.random_policy is False:
+                future_action = mdp.policy[s]  # define the action
+                action_matrix = mdp.action_matrix[
+                    future_action
+                ]  # consider the action and retrieve the matrix for this action
 
-            action_matrix = mdp.action_matrix[
-                future_action
-            ]  # consider the action and retrieve the matrix for this action
+                v = mdp.rew[s, future_action] + gamma * np.sum(
+                    action_matrix[s, :] * V_prev
+                )
 
-            v = mdp.rew[s, future_action] + gamma * np.sum(action_matrix[s, :] * V_prev)
-
-            """
             # for now the stochastic policy is not implemented for iterative algorithm, at the beginning of policy evaluation is taken the argmax action
-             else:
+            else:
+                if mdp.policy.ndim == 1:
+                    policy_matrix = np.zeros(
+                        (len(mdp.state_space), len(mdp.action_space))
+                    )
+                    for state_idx in range(len(mdp.state_space)):
+                        action = mdp.policy[state_idx]
+                        policy_matrix[state_idx, action] = 1.0
+                    mdp.policy = policy_matrix
                 v = 0
-
                 for a in mdp.action_matrix.keys():
                     v += mdp.policy[s, a] * (
                         mdp.rew[s, a]
                         + gamma * np.sum(mdp.action_matrix[a][s, :] * V_prev)
                     )
-
-            """
 
             # Update delta for convergence check
             delta = max(delta, np.abs(v - V_prev[s]))
@@ -65,6 +70,13 @@ def montecarlo_policy_evaluation(mdp, steps=10, num_episodes=100, gamma=0.9):
     V = np.zeros(len(mdp.state_space))
     N = np.zeros(len(mdp.state_space))  # State visit counts
     G = np.zeros(len(mdp.state_space))  # Cumulative returns
+    original_policy = mdp.policy.copy()
+    if mdp.random_policy is False:
+        policy_matrix = np.zeros((len(mdp.state_space), len(mdp.action_space)))
+        for state_idx in range(len(mdp.state_space)):
+            action = mdp.policy[state_idx]
+            policy_matrix[state_idx, action] = 1.0
+        mdp.policy = policy_matrix
 
     for i in range(num_episodes):
         episode = mdp.generate_episode(steps)
@@ -78,6 +90,7 @@ def montecarlo_policy_evaluation(mdp, steps=10, num_episodes=100, gamma=0.9):
                 G[state - 1] += calculate_G_t(episode[t:], gamma)
                 V[state - 1] = G[state - 1] / N[state - 1]
 
+    mdp.policy = original_policy
     return V
 
 
@@ -104,6 +117,15 @@ def temporal_difference_policy_evaluation(
 
     V(s) = V(s) + alpha*(r + gamma * V(s+1) - V(s))
     """
+
+    original_policy = mdp.policy.copy()
+    if mdp.random_policy is False:
+        policy_matrix = np.zeros((len(mdp.state_space), len(mdp.action_space)))
+        for state_idx in range(len(mdp.state_space)):
+            action = mdp.policy[state_idx]
+            policy_matrix[state_idx, action] = 1.0
+        mdp.policy = policy_matrix
+
     V = np.zeros(len(mdp.state_space))  # Initialize value function
     for i in range(num_episodes):
         episode = mdp.generate_episode(
@@ -113,7 +135,7 @@ def temporal_difference_policy_evaluation(
             V[state - 1] = V[state - 1] + alpha * (
                 reward + gamma * V[next_state - 1] - V[state - 1]
             )
-
+    mdp.policy = original_policy
     return V
 
 
@@ -123,7 +145,13 @@ if __name__ == "__main__":
     starting_position = 8
     final_position = 2
 
-    mdp = MDP_GridSearch(matrix, starting_position, final_position)
+    mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=False)
+    if mdp.random_policy:
+        print("Using random policy")
+        print(mdp.policy)
+    else:
+        print("Using deterministic policy")
+        print(mdp.policy)
 
     value_state = iterative_algorithm_policy_evaluation(mdp)
     print("Value State using Iterative Algorithm:")

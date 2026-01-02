@@ -14,11 +14,14 @@ def policy_iteration(mdp, gamma=0.9):
     Q(s,a) = R(s,a) + gamma * (sum over_s' P(s'|s, a) * V(s'))
     pi_{i+1}(s) = argmax_a Q(s,a)
     """
+
     if mdp.random_policy:
         new_policy = np.argmax(mdp.policy, axis=1)  # Stochastic initial policy
     else:
         new_policy = mdp.policy  # Deterministic initial policy
-        print(f"Initial policy: {new_policy}")
+
+    original_policy = mdp.policy.copy()
+    new_policy = mdp.policy.copy()
 
     V = np.zeros(len(mdp.state_space))  # Initialize value function
     Q = np.zeros(
@@ -51,6 +54,8 @@ def policy_iteration(mdp, gamma=0.9):
 
         new_policy = np.argmax(Q, axis=1)
 
+    mdp.policy = original_policy  # Restore original policy
+
     return new_policy, V, policy_history, value_history
 
 
@@ -67,13 +72,17 @@ def value_iteration(mdp, gamma=0.9, theta=0.001):
     V_action = np.zeros((len(mdp.state_space), len(mdp.action_space)))
     V_prev = np.zeros_like(V)
 
+    # stopping condition
     delta = 0
+
+    # save
+    original_policy = mdp.policy.copy()
+
     # Random policy is not used in value iteration, but kept for consistency
     if mdp.random_policy:
         new_policy = np.argmax(mdp.policy, axis=1)  # Stochastic initial policy
     else:
         new_policy = mdp.policy  # Deterministic initial policy
-        print(f"Initial policy: {new_policy}")
 
     # History tracking
     value_history = []
@@ -111,7 +120,7 @@ def value_iteration(mdp, gamma=0.9, theta=0.001):
 
         if delta < theta:
             break
-
+    mdp.policy = original_policy  # Restore original policy
     return new_policy, V, policy_history, value_history
 
 
@@ -171,6 +180,9 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
     k = 0
     eps = 1
 
+    # save
+    original_policy = mdp.policy.copy()
+
     # Initialize policy with epsilon-greedy
     new_policy_matrix, greedy_policy = eps_greedy_policy(mdp, Q, eps)
 
@@ -203,8 +215,8 @@ def montecarlo_model_free_on_policy(mdp, steps, num_episodes, gamma=0.9):
         # Save to history
         policy_greedy_history.append(np.copy(greedy_policy))
         Q_history.append(np.copy(Q))
-    print(f"Final epsilon: {eps}")
 
+    mdp.policy = original_policy  # Restore original policy
     return greedy_policy, Q, policy_greedy_history, Q_history
 
 
@@ -230,15 +242,8 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
     i = 0  # to count steps in episode
     k = 0  # to decay epsilon
 
-    # Initialize policy
-    if not mdp.random_policy:
-        policy_matrix = np.zeros(
-            (len(mdp.state_space), len(mdp.action_space)), dtype=int
-        )
-        policy_matrix[np.arange(len(mdp.state_space)), mdp.policy] = (
-            1  # this is useful for stochastic policy representation (generate episodes)
-        )
-        mdp.policy = policy_matrix
+    # save
+    original_policy = mdp.policy.copy()
 
     # Generate initial epsilon-greedy policy
     new_policy_matrix, greedy_policy = eps_greedy_policy(mdp, Q, eps)
@@ -303,10 +308,11 @@ def td_model_free_on_policy(mdp, steps, num_episodes, alpha=0.2, gamma=0.9):
         # Save to history after each episode
         policy_greedy_history.append(greedy_policy)
         Q_history.append(np.copy(Q))
-    print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
+    # print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
 
     # After training, return the greedy policy and Q
     # best_policy = np.argmax(Q, axis=1)
+    mdp.policy = original_policy  # Restore original policy
     return greedy_policy, Q, policy_greedy_history, Q_history
 
 
@@ -328,6 +334,8 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
     eps = 1  # initial exploration rate
     i = 0  # to count steps in episode
     k = 0  # to decay epsilon
+
+    original_policy = mdp.policy.copy()
 
     # History tracking
     policy_greedy_history = [np.argmax(Q, axis=1)]
@@ -371,16 +379,17 @@ def q_learning_model_free_off_policy(mdp, steps, num_episodes, alpha=0.2, gamma=
             i += 1
 
         # Decay epsilon after each episode
-        k += 0.3
+        k += 0.01
         eps = min(1.0, 1 / np.sqrt(k))  # TODO: find a common decay for all algorithms
 
         # Save to history after each episode
         policy_greedy_history.append(np.argmax(Q, axis=1))
         Q_history.append(np.copy(Q))
-    print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
+    # print(f"Final epsilon after episode {episode_idx + 1}: {eps}")
 
     # After training, return the greedy policy and Q
     best_policy = np.argmax(Q, axis=1)
+    mdp.policy = original_policy  # Restore original policy
     return best_policy, Q, policy_greedy_history, Q_history
 
 
@@ -390,7 +399,9 @@ if __name__ == "__main__":
     starting_position = 8
     final_position = 2
 
-    mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=False)
+    mdp = MDP_GridSearch(
+        matrix, starting_position, final_position, random_policy=True
+    )  # TODO: cahnge the algorithm in order to not change the env variable
 
     best_pol, V, pol_hist, val_hist = policy_iteration(mdp)
     print(f"Best policy, policy iteration: {best_pol}")

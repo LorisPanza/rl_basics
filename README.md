@@ -34,6 +34,59 @@ Implemented techniques:
 - **Q-Learning Model-Free Control**: [`q_learning_model_free_off_policy`](optimal_policy_search.py) learns optimal policies using off-policy TD updates and epsilon-greedy exploration.
 - **Deep Q-Network (DQN)**: [`dqn`](value_function_approximator.py) uses neural networks to approximate Q-values and optimize policies via experience replay and target networks.
 
+## Visualization
+
+The repository includes a comprehensive visualization tool ([`visualization.py`](visualization.py)) that provides interactive dashboards for analyzing RL algorithms. The visualizer displays:
+
+- **Policy Grids**: Visual representation of the learned policy with directional arrows showing the optimal action for each state
+- **Value Function Heatmaps**: Color-coded visualization of state values showing which states are most valuable
+- **Q-Value Heatmaps**: Matrix visualization of Q-values for all state-action pairs
+- **Training Progress**: Real-time tracking of learning dynamics across episodes
+- **Interactive Slider**: Step through the learning process to observe how policies and values evolve over time
+
+### Creating Visualizations
+
+To visualize a single algorithm with interactive controls:
+
+```python
+from visualization import RLVisualizer
+from environment import MDP_GridSearch
+import numpy as np
+
+# Create environment
+matrix = np.array([[0, 0, 0], [0, 0, 0], [1, 0, 0]])
+mdp = MDP_GridSearch(matrix, starting_position=3, final_position=7)
+
+# Visualize DQN training
+visualizer = RLVisualizer(mdp, algorithm_name="dqn")
+visualizer.create_dashboard(steps=30, num_episodes=500)
+```
+
+To compare multiple algorithms side-by-side:
+
+```python
+from visualization import visualize_algorithm_comparison
+
+visualize_algorithm_comparison(mdp, steps=20, num_episodes=100)
+```
+
+### Supported Algorithms for Visualization
+
+- `policy_iteration` - Model-based policy iteration
+- `value_iteration` - Model-based value iteration  
+- `montecarlo` - Monte Carlo model-free on-policy control
+- `td_sarsa` - Temporal Difference SARSA on-policy control
+- `q_learning` - Q-Learning off-policy control
+- `dqn` - Deep Q-Network with neural network approximation
+
+### Example Visualization Output
+
+The dashboard provides a comprehensive view of the learning process:
+
+![RL Algorithm Visualization](visualization_example.png)
+
+*The visualization shows the policy grid (left), value function heatmap (center), Q-value matrix (bottom), and algorithm information (right). Use the slider at the bottom to step through training episodes and observe how the agent learns over time.*
+
 ## Usage
 
 Run any of the main scripts to see the algorithms in action. For example:
@@ -44,16 +97,26 @@ python optimal_policy_search.py
 
 This will print the results of policy iteration, value iteration, Monte Carlo, TD, and Q-learning algorithms.
 
+To launch the interactive visualization:
+
+```sh
+python visualization.py
+```
+
 ## Requirements
 
-See [requirements.txt](requirements.txt) for dependencies.
+See [requirements.txt](requirements.txt) for dependencies. Key requirements include:
+- `numpy` - Numerical computations
+- `torch` - Deep learning for DQN
+- `matplotlib` - Visualization and plotting
 
 ## File Overview
 
-- [environment.py](environment.py): MDP environment and episode generation.
-- [policy_evaluation.py](policy_evaluation.py): Policy evaluation algorithms.
-- [optimal_policy_search.py](optimal_policy_search.py): Policy control algorithms.
-- [value_function_approximator.py](value_function_approximator.py): DQN implementation.
+- [environment.py](environment.py): MDP environment and episode generation
+- [policy_evaluation.py](policy_evaluation.py): Policy evaluation algorithms
+- [optimal_policy_search.py](optimal_policy_search.py): Policy control algorithms
+- [value_function_approximator.py](value_function_approximator.py): DQN implementation with neural networks
+- [visualization.py](visualization.py): Interactive visualization dashboard for analyzing RL algorithms
 
 ## References
 

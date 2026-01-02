@@ -59,17 +59,17 @@ class MDP_GridSearch:
         else:
             self.policy = [0, 0, 0, 0, 0, 0, 0, 0, 0]
 
-        print("Reward map: ")
-        print(self.matrix)  # N x M
+        # print("Reward map: ")
+        # print(self.matrix)  # N x M
 
-        print("Policy:")
-        print(self.policy)  # if not random -> S, else S x A
+        # print("Policy:")
+        # print(self.policy)  # if not random -> S, else S x A
 
-        print("Reward matrix: ")
-        print(self.rew)  # S x A
+        # print("Reward matrix: ")
+        # print(self.rew)  # S x A
 
-        print("State space: ")
-        print(self.state_space)  # S
+        # print("State space: ")
+        # print(self.state_space)  # S
 
         # self.rew_pi = self.state_reward_policy()
         # print("Reward for each state given a policy: ")
@@ -81,7 +81,7 @@ class MDP_GridSearch:
         self.starting_position = starting_position
         self.final_position = final_position
 
-        print(f"Init pos {self.starting_position}, Final pos: {self.final_position}")
+        # print(f"Init pos {self.starting_position}, Final pos: {self.final_position}")
 
         self.actual_state = self.starting_position
 

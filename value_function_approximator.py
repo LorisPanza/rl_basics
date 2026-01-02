@@ -101,45 +101,75 @@ def create_batch(target_net, mdp, buffer_sarsa, gamma, batch_size=32):
     return batch_state, batch_action, batch_target
 
 
-def optimize_dqn(policy_net, batch_state, batch_action, batch_target):
+def optimize_dqn(policy_net, optimizer, batch_state, batch_action, batch_target):
     mse = nn.MSELoss()
-    lr = 0.001
-    optimizer = torch.optim.Adam(policy_net.parameters(), lr=lr)
 
     optimizer.zero_grad()
-    # prediction
     pred = policy_net(batch_state)
     pred_act = pred.gather(1, batch_action.unsqueeze(1)).squeeze(1)
     loss = mse(pred_act, batch_target)
     loss.backward()
-    # optimizer step
     optimizer.step()
 
-    return policy_net
+    return loss.item()  # Return loss for logging
 
 
-def dqn(mdp, steps, episodes, gamma=0.9):
+def extract_policy_and_q(policy_net, mdp):
+    """
+    Extract the current policy and Q-values from the policy network.
+    :param policy_net: The policy network.
+    :param mdp: The MDP environment.
+    :return: Tuple of (policy, Q-values) where policy is array of best actions
+             and Q-values is array of Q-values for all state-action pairs.
+    """
+    policy = np.zeros(len(mdp.state_space), dtype=int)
+    q_values = np.zeros((len(mdp.state_space), len(mdp.action_space)))
+
+    for s in range(len(mdp.state_space)):
+        s_torch = torch.nn.functional.one_hot(
+            torch.tensor(s), num_classes=len(mdp.state_space)
+        ).float()
+        with torch.no_grad():
+            pred = policy_net(s_torch).detach().numpy()
+
+        q_values[s] = pred
+        policy[s] = np.argmax(pred)
+
+    return policy, q_values
+
+
+def dqn(mdp, steps, episodes, gamma=0.9, save_frequency=1):
     """
     Deep Q-Network (DQN) algorithm for policy optimization.
     :param mdp: MDP environment
     :param steps: Number of steps in each episode
     :param episodes: Number of episodes to sample
     :param gamma: Discount factor
-    :return: Q-value function for each state-action pair
+    :param save_frequency: How often to save policy and Q-values (in episodes)
+    :return: Tuple of (best_policy, final_q_values, q_history, policy_history)
     """
     eps = 1  # exploration factor
     k = 0  # decay factor
     buffer_sarsa = []  # experience replay buffer
     batch_size = 8  # batch size for experience replay
     C = 3  # target network update frequency
+    update_counter = 0  # counter for target network updates
 
     policy_net = DQNet(states=mdp.state_space, actions=mdp.action_space)
     target_net = DQNet(states=mdp.state_space, actions=mdp.action_space)
+    target_net.load_state_dict(policy_net.state_dict())  # Initialize target network
+
+    optimizer = torch.optim.Adam(policy_net.parameters(), lr=0.001)
+
+    # History tracking
+    q_history = []
+    policy_history = []
 
     for num_episode in range(episodes):
         i = 0
         s_t = mdp.starting_position  # s(t)
         print(f"Episode {num_episode + 1}/{episodes}")
+
         while i < steps:
             # Take action, observe reward and next state
             s_t, a_t, r_t, s_t_1 = greedy_dqn_step(mdp, s_t, policy_net, eps)
@@ -150,31 +180,38 @@ def dqn(mdp, steps, episodes, gamma=0.9):
                 batch_state, batch_action, batch_target = create_batch(
                     target_net, mdp, buffer_sarsa, gamma, batch_size=batch_size
                 )
-                policy_net_params_improved = optimize_dqn(
-                    policy_net, batch_state, batch_action, batch_target
+                loss = optimize_dqn(
+                    policy_net, optimizer, batch_state, batch_action, batch_target
                 )
-                policy_net.load_state_dict(policy_net_params_improved.state_dict())
+
+                update_counter += 1
+                if update_counter % C == 0:
+                    target_net.load_state_dict(policy_net.state_dict())
 
             if s_t_1 == mdp.final_position:
                 break
+
             s_t = s_t_1
             i += 1
             k += 0.5
             eps = 1 / np.sqrt(k)
 
-            if k % C == 0:
-                target_net.load_state_dict(policy_net.state_dict())
+        # Save policy and Q-values at specified intervals
+        if (num_episode + 1) % save_frequency == 0:
+            current_policy, current_q = extract_policy_and_q(policy_net, mdp)
+            policy_history.append(current_policy.copy())
+            q_history.append(current_q.copy())
+            print(f"  Saved snapshot at episode {num_episode + 1}")
 
-    # Derive policy from the trained DQN
-    best_policy = np.zeros(len(mdp.state_space), dtype=int)
-    for s in range(0, len(mdp.state_space)):
-        s_t_torch = torch.nn.functional.one_hot(
-            torch.tensor(s), num_classes=len(mdp.state_space)
-        ).float()
-        pred = policy_net(s_t_torch).detach().numpy()
-        best_policy[s] = np.argmax(pred)
+    # Extract final policy and Q-values
+    best_policy, final_q_values = extract_policy_and_q(policy_net, mdp)
 
-    return pred, best_policy
+    # Add final values to history if not already added
+    if episodes % save_frequency != 0:
+        policy_history.append(best_policy.copy())
+        q_history.append(final_q_values.copy())
+
+    return best_policy, final_q_values, policy_history, q_history
 
 
 if __name__ == "__main__":

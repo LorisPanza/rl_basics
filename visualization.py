@@ -227,13 +227,14 @@ class RLVisualizer:
             self.policy_history = pol_hist
             self.q_history = Q_hist
             self.value_history = [np.max(Q_val, axis=1) for Q_val in Q_hist]
-        """
-            elif self.algorithm_name == "dqn":
-            Q, policy = dqn(self.mdp, steps=steps, episodes=num_episodes)
-            self.policy_history = [policy]
-            self.q_history = [Q]
-            self.value_history = [np.max(Q, axis=1)]
-        """
+
+        elif self.algorithm_name == "dqn":
+            policy, Q, pol_hist, Q_hist = dqn(
+                self.mdp, steps=steps, episodes=num_episodes
+            )
+            self.policy_history = pol_hist
+            self.q_history = Q_hist
+            self.value_history = [np.max(Q_val, axis=1) for Q_val in Q_hist]
 
     def _update_visualizations(self, step):
         """
@@ -308,14 +309,18 @@ class RLVisualizer:
         self.fig.canvas.draw_idle()
 
 
-def visualize_algorithm_comparison(mdp, steps=20, num_episodes=100):
+def visualize_algorithm_comparison(
+    mdp,
+    steps=20,
+    num_episodes=100,
+):
     """
     Compare multiple RL algorithms side by side.
     :param mdp: MDP environment
     :param steps: Number of steps per episode
     :param num_episodes: Number of episodes to train
     """
-    algorithms = ["policy_iteration", "value_iteration", "q_learning"]
+    algorithms = ["policy_iteration", "value_iteration", "montecarlo", "dqn"]
 
     fig, axes = plt.subplots(len(algorithms), 2, figsize=(14, 12))
     fig.suptitle("RL Algorithms Comparison", fontsize=16, fontweight="bold")
@@ -327,14 +332,14 @@ def visualize_algorithm_comparison(mdp, steps=20, num_episodes=100):
 
         if visualizer.policy_history:
             visualizer.visualize_grid_policy(
-                visualizer.policy_history[0],
+                visualizer.policy_history[-1],
                 axes[idx, 0],
                 f"{algo.replace('_', ' ').title()} - Policy",
             )
 
         if visualizer.value_history:
             visualizer.visualize_value_function(
-                visualizer.value_history[0],
+                visualizer.value_history[-1],
                 axes[idx, 1],
                 f"{algo.replace('_', ' ').title()} - Value",
             )
@@ -352,8 +357,12 @@ if __name__ == "__main__":
     mdp = MDP_GridSearch(matrix, starting_position, final_position, random_policy=True)
 
     # Single algorithm visualization with step-through slider
-    visualizer = RLVisualizer(mdp, algorithm_name="q_learning")
-    visualizer.create_dashboard(steps=30, num_episodes=1000)
+    visualizer = RLVisualizer(mdp, algorithm_name="montecarlo")
+    visualizer.create_dashboard(steps=30, num_episodes=500)
 
     # Uncomment to compare algorithms
-    # visualize_algorithm_comparison(mdp, steps=20, num_episodes=100)
+    visualize_algorithm_comparison(
+        mdp,
+        steps=20,
+        num_episodes=500,
+    )
