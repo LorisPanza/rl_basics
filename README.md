@@ -6,6 +6,34 @@ This repository implements fundamental reinforcement learning (RL) algorithms fo
 
 - [`MDP_GridSearch`](environment.py): Represents the grid-based MDP environment. States and actions are encoded as integers and strings, respectively. The environment supports random and deterministic policies, computes reward matrices, and generates episodes for learning.
 
+### Grid World Setup
+
+The environment is defined by a **matrix** that represents the grid world:
+
+```python
+matrix = np.array([
+    [0, 1, 0],
+    [0, 0, 0],
+    [1, 0, 0]
+])
+```
+
+- **Matrix dimensions**: An `n×n` matrix defines an `n×n` grid world
+- **Matrix values**: Each cell contains the **reward** the agent receives when entering that state
+  - `0`: No reward (neutral state)
+  - `1`: Positive reward (goal or favorable state)
+  - Negative values can represent penalties or obstacles
+- **State numbering**: States are numbered from 1 to n², reading left-to-right, top-to-bottom
+  - For a 3×3 grid: states are numbered 1, 2, 3 (top row), 4, 5, 6 (middle row), 7, 8, 9 (bottom row)
+
+**Example Configuration**:
+```python
+starting_position = 3  # Agent starts at state 3 (top-right corner)
+final_position = 7     # Goal is at state 7 (bottom-left corner, reward=1)
+```
+
+The agent navigates the grid using four actions: **up (↑), down (↓), left (←), right (→)**, receiving rewards based on the matrix values as it moves through states.
+
 ## Policy Representation
 
 A **policy** defines the agent's behavior by mapping states to actions. In this workspace:
